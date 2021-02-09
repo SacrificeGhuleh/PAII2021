@@ -1,0 +1,4 @@
+[submodule "cuda-samples"]
+	path = lib/cuda-samples
+	url = https://github.com/SacrificeGhuleh/cuda-samples.git
+	branch = cmake_v11.2
