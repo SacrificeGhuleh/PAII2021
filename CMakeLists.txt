@@ -1,8 +1,16 @@
 cmake_minimum_required(VERSION 3.17)
-project(ParallelAlgorithms2021)
+project(ParallelAlgorithms2021 CUDA CXX)
+
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 14)
+
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+#set(CMAKE_VERBOSE_MAKEFILE ON)
+
+
+find_package(CUDAToolkit)
 
 # Where to find CMake modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
@@ -30,8 +38,15 @@ set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib")
 # Add doxygen to project
 #include(${CMAKE_MODULE_PATH}/doxygen.cmake)
 
-add_subdirectory(lib/pg)
-add_subdirectory(lib/cuda-samples/Common)
-add_subdirectory(lib/cuda-samples/Samples cuda-samples)
+
+include_directories(lib/pg)
+include_directories(lib/utility)
+include_directories(lib/cuda-samples/Common)
+
+add_subdirectory(lib/utility)
+#add_subdirectory(lib/cuda-samples/Samples/matrixMul)
+
+set(COMMON_LIBS utility)
+
 add_subdirectory(src)
 

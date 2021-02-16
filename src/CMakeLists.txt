@@ -1,2 +1,4 @@
 #add_subdirectory(project)
 add_subdirectory(template)
+add_subdirectory(playground)
+add_subdirectory(cv02)
