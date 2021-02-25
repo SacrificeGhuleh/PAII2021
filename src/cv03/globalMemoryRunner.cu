@@ -2,12 +2,13 @@
 #include <timer.h>
 #include <type_traits>
 #include <benchmark.h>
+#include <mat.cuh>
 
 #define COMP_TYPE int
 
-constexpr size_t width = 20000; //cols
-constexpr size_t height = 20000; // rows
-constexpr size_t numberOfTests = 20;
+constexpr size_t width = 10; //cols
+constexpr size_t height = 10; // rows
+constexpr size_t numberOfTests = 10;
 
 
 constexpr size_t widthInBytes = width * sizeof(COMP_TYPE); //cols
@@ -23,164 +24,6 @@ constexpr bool printMatrices = (length <= 15 * 15);
 cudaError_t err = cudaError_t::cudaSuccess;
 cudaDeviceProp deviceProp = cudaDeviceProp();
 
-//void printSize(size_t size) {
-//  float flSize;
-//  if (size < 1024UL) {
-//    printf("%zu B\n", size);
-//    return;
-//  } else if (size < 1024UL * 1024UL) {
-//    flSize = size / 1024.f;
-//    printf("%f kB\n", flSize);
-//    return;
-//  } else if (size < 1024UL * 1024UL * 1024UL) {
-//    flSize = size / (1024.f * 1024.f);
-//    printf("%f MB\n", flSize);
-//    return;
-//  } else {
-//    flSize = size / (1024.f * 1024.f * 1024.f);
-//    printf("%f GB\n", flSize);
-//    return;
-//  }
-//}
-
-template<typename T, typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type>
-struct Mat {
-public:
-  typedef T Type;
-  
-  Mat(size_t rows, size_t cols) :
-      rows_(rows),
-      cols_(cols),
-      rowsInBytes_(rows * sizeof(Type)),
-      colsInBytes_(cols * sizeof(Type)),
-      deviceArray_(nullptr),
-      hostArray_(nullptr) {
-//    printf("Constructor\n");
-    // Allocate device data
-    checkCudaErrors(cudaMallocPitch((void **) &deviceArray_, &pitchInBytes_, widthInBytes, height));
-    pitchInElements_ = pitchInBytes_ / sizeof(COMP_TYPE);
-    
-    printf("Pitch: %zu B (%zu items)\n", pitchInBytes_, pitchInElements_);
-    
-    // Allocate host data
-    hostArray_ = static_cast<COMP_TYPE *>(::operator new(pitchInBytes_ * height));
-  }
-  
-  void free()
-  /*~Mat()*/ {
-//    printf("Destructor\n");
-    SAFE_DELETE_CUDA(deviceArray_);
-    SAFE_DELETE_ARRAY(hostArray_);
-  }
-  
-  __device__ inline size_t getRowIdx(dim3 blockDim, dim3 blockIdx, dim3 threadIdx) const { return blockDim.x * blockIdx.x + threadIdx.x; }
-  
-  __device__ inline size_t getColIdx(dim3 blockDim, dim3 blockIdx, dim3 threadIdx) const { return blockDim.y * blockIdx.y + threadIdx.y; }
-  
-  __device__ __host__ inline size_t getIdx(size_t row, size_t col) const { return row * pitchInElements_ + col; }
-  
-  __device__ __host__ bool inBounds(size_t row, size_t col) const { return (row < rows_) && (col < cols_); }
-  
-  __device__ inline Type &atDevice(dim3 blockDim, dim3 blockIdx, dim3 threadIdx) {
-    const size_t row = getRowIdx(blockDim, blockIdx, threadIdx);
-    const size_t col = getColIdx(blockDim, blockIdx, threadIdx);
-    return atDevice(row, col);
-  }
-  
-  __device__ inline Type &atDevice(size_t row, size_t col) {
-//      assert((row < rows_) && (col < cols_))
-    const size_t idx = row * pitchInElements_ + col;
-    return atDevice(idx);
-  }
-  
-  __device__ inline Type &atDevice(size_t idx) {
-    return deviceArray_[idx];
-  }
-  
-  __host__ inline Type &atHost(size_t row, size_t col) {
-//      assert((row < rows_) && (col < cols_))
-    const size_t idx = row * pitchInElements_ + col;
-    return atHost(idx);
-  }
-  
-  __host__ inline Type &atHost(size_t idx) {
-    return hostArray_[idx];
-  }
-  
-  // Getters
-  __device__ __host__ inline size_t getRows() const {
-    return rows_;
-  }
-  
-  __host__ inline void download() {
-    cudaMemcpy2D(hostArray_, pitchInBytes_, deviceArray_, pitchInBytes_, widthInBytes, height, cudaMemcpyKind::cudaMemcpyDeviceToHost);
-  }
-  
-  __host__ inline void upload() {
-    cudaMemcpy2D(deviceArray_, pitchInBytes_, hostArray_, pitchInBytes_, widthInBytes, height, cudaMemcpyKind::cudaMemcpyHostToDevice);
-  }
-  
-  __host__ inline void checkDeviceMatrix(const char *format = "%f ", const char *message = "") {
-    ::checkDeviceMatrix(deviceArray_, pitchInBytes_, height, width, format, message);
-  }
-  
-  __host__ inline void checkDeviceMatrix(bool uploadToDevice, const char *format = "%f ", const char *message = "") {
-    if (uploadToDevice)
-      upload();
-    checkDeviceMatrix(format, message);
-  }
-  
-  __host__ inline void checkHostMatrix(const char *format = "%f ", const char *message = "") {
-    ::checkHostMatrix(hostArray_, pitchInBytes_, height, width, format, message);
-  }
-  
-  __host__ inline void checkHostMatrix(bool downloadFromDevice, const char *format = "%f ", const char *message = "") {
-    if (downloadFromDevice)
-      download();
-    checkHostMatrix(format, message);
-  }
-  
-  __device__ __host__ inline size_t getCols() const {
-    return cols_;
-  }
-  
-  __device__ __host__ inline size_t getRowsInBytes() const {
-    return rowsInBytes_;
-  }
-  
-  __device__ __host__ inline size_t getColsInBytes() const {
-    return colsInBytes_;
-  }
-  
-  __device__ inline Type *getDeviceArray() {
-    return deviceArray_;
-  }
-  
-  __host__ inline Type *getHostArray() {
-    return hostArray_;
-  }
-  
-  __device__ __host__ inline size_t getPitchInBytes() const {
-    return pitchInBytes_;
-  }
-  
-  __device__ __host__ inline size_t getPitchInElements() const {
-    return pitchInElements_;
-  }
-
-private:
-  const size_t rows_;
-  const size_t cols_;
-  
-  const size_t rowsInBytes_;
-  const size_t colsInBytes_;
-  
-  Type *deviceArray_;
-  Type *hostArray_;
-  
-  size_t pitchInBytes_;
-  size_t pitchInElements_;
-};
 
 template<typename T, typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type>
 __global__ void fill(T *__restrict__ arr, const size_t pitchInElements) {
@@ -221,7 +64,6 @@ __global__ void increment(T *__restrict__ arr, const size_t pitchInElements) {
     arr[idx] += 1;
   }
 }
-
 
 template<typename T, typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type>
 __global__ void fillMat(Mat<T> arr) {
@@ -313,7 +155,6 @@ void testNative(int nrOfTests) {
   }
   
   auto testFunc = [&]() {
-    
     fill<<<dimGrid, dimBlock>>>(deviceArray, pitchInElements);
     printLastCudaError("ERROR: ");
     checkCudaErrors(cudaDeviceSynchronize());
@@ -341,7 +182,6 @@ int main() {
   
   printf("testing %zu x %zu matrices\n", width, height);
 //  printSize(length * sizeof(lengthInBytes));
-  
   
   testNative(numberOfTests);
   testMat(numberOfTests);
